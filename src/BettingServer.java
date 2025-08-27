@@ -13,6 +13,7 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 public final class BettingServer {
+    private static final int DEFAULT_PORT = 8080;
     private static final BettingStoreImpl bettingStore = new BettingStoreImpl();
 
     private static void placeBet(int betOfferId, int customerId, int stake) {
@@ -37,7 +38,7 @@ public final class BettingServer {
     }
 
     public static void main(String[] args) throws IOException {
-        MiniHttpServer server = MiniHttpServer.create(8080);
+        MiniHttpServer server = MiniHttpServer.create(DEFAULT_PORT);
 
         // register exception handler
         server.exceptionHandler((ctx, e) -> {
@@ -81,7 +82,7 @@ public final class BettingServer {
 
         // start server
         server.start();
-        System.out.println("Betting Server Started");
+        System.out.println("Betting Server Started Listening on port " + DEFAULT_PORT);
 
         // close all
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
