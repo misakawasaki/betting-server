@@ -9,7 +9,7 @@ import java.util.*;
 import java.util.concurrent.Executors;
 import java.util.regex.Pattern;
 
-public class MiniHttpServer {
+public final class MiniHttpServer {
     private final HttpServer server;
     private final Map<String, List<Route>> routes = new HashMap<>();
     private final List<Middleware> middlewares = new ArrayList<>();
@@ -18,7 +18,7 @@ public class MiniHttpServer {
 
     private MiniHttpServer(int port) throws IOException {
         this.server = HttpServer.create(new InetSocketAddress(port), 0);
-        this.server.setExecutor(Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors() * 2));
+        this.server.setExecutor(Executors.newVirtualThreadPerTaskExecutor());
         this.prefixStack.push("");
     }
 
