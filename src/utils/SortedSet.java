@@ -144,6 +144,7 @@ public final class SortedSet<T, U extends Comparable<U>> {
             }
             tail = getNext(tail);
         }
+        actualLength = getValue(tail) == lowerBound ? actualLength - 1 : actualLength;
 
         final int first = tail;
         final int cnt = Math.min(actualLength, n);
@@ -181,7 +182,7 @@ public final class SortedSet<T, U extends Comparable<U>> {
      */
     private void insert(int pos, int start, U value) {
         int index = findPos(start, value);
-        if (pos == start) {
+        if (pos == index) {
             setValue(pos, value);
             return;
         }
@@ -205,20 +206,14 @@ public final class SortedSet<T, U extends Comparable<U>> {
      */
     private int findPos(int start, U value) {
         U currentValue = getValue(start);
-        if (currentValue.compareTo(value) >= 0) {
-            while (
-                    getPrev(start) != -1 &&
-                            getValue(getPrev(start)).compareTo(value) >= 0
-            ) {
-                start = getPrev(start);
-            }
-        } else {
-            while (
-                    getNext(start) != -1 &&
-                            getValue(getNext(start)).compareTo(value) <= 0
-            ) {
+        if (value.compareTo(currentValue) > 0) {
+            while (getNext(start) != -1 && getValue(getNext(start)).compareTo(value) < 0) {
                 start = getNext(start);
             }
+        } else {
+            do {
+                start = getPrev(start);
+            } while (getValue(start).compareTo(value) >= 0);
         }
         return start;
     }
@@ -250,7 +245,7 @@ public final class SortedSet<T, U extends Comparable<U>> {
         if (index == -1) {
             return;
         }
-        links[index] = (links[index] & 0xFFFF0000) | next;
+        links[index] = (links[index] & 0xFFFF0000) | (next & 0xFFFF);
     }
 
     /**
