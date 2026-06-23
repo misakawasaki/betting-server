@@ -16,7 +16,6 @@ public final class Context {
     private final String query;
     private final Map<String, String> pathParams = new HashMap<>();
     private final Map<String, String> queryParams = new HashMap<>();
-    private Session session;
     private boolean aborted = false;
     private int statusCode = 200;
     private boolean committed = false;
@@ -46,14 +45,6 @@ public final class Context {
 
     public String method() {
         return method;
-    }
-
-    public Session session(int customerId, boolean created) {
-        if (session != null) {
-            return session;
-        }
-        session = SessionManager.getInstance().getSession(customerId, created);
-        return session;
     }
 
     public Map<String, String> pathParams() {

@@ -2,49 +2,29 @@
 
 #### **Key Decisions**
 
-Generate cryptographically secure session keys that **encode the `customerId` (prefix)** directly, enabling **stateless lookup** of the associated customer without additional map lookup.
+Generate session keys that are **fully stateless** — both the `customerId` and the expiration timestamp are encoded directly into the key. This eliminates the need for a server-side session map, cleanup thread, and any shared mutable state. Validation is a pure computation: parse the prefix and expiry, compare against the current time.
 
 #### **Key Format**
 
-[hex-digit-length][shifted-digits][random-suffix]
+[hex-digit-length][shifted-digits][expiry-hex(8)][random-padding]
 
 - **`[hex-digit-length]`**: A single hexadecimal character (0–9, a–f) representing the **number of digits** in the original customer ID.
   For example, if the customer ID is `123`, which has 3 digits, this part will be `'3'`.
-- **`[shifted-digits]`**: Each digit of the customer ID is encoded by adding the ASCII value of `'A'` (65) to it. This shifts the digit character into the letter range to avoid having plain digits in this segment.
+- **`[shifted-digits]`**: Each digit character of the customer ID is encoded by adding the ASCII value of `'A'` (65) to it. This shifts the digit character into the letter range to avoid having plain digits in this segment.
   For example:
   
-  - `'1' + 'A' = 'B'` (ASCII 49 + 65 = 66 → `'B'`)
-  - `'2' + 'A' = 'C'`
-  - `'3' + 'A' = 'D'`
-    So `123` becomes `'B'`, `'C'`, `'D'` → `"BCD"` in this segment.
-- **`[random-suffix]`**: The remaining characters are filled with cryptographically secure random characters selected from the set `0-9, a-z, A-Z`, ensuring unpredictability and security.
+  - `'1' + 'A' = 'r'` (ASCII 49 + 65 = 114 → `'r'`)
+  - `'2' + 'A' = 's'`
+  - `'3' + 'A' = 't'`
+    So `123` becomes `'r'`, `'s'`, `'t'` → `"rst"` in this segment.
+- **`[expiry-hex]`**: 8 lowercase hex characters encoding the expiration time in seconds since the Unix epoch. This allows stateless expiry checking — if the current time exceeds the encoded expiry, the key is rejected without any map lookup.
+- **`[random-padding]`**: The remaining characters are filled with cryptographically secure random characters selected from the set `0-9, a-z, A-Z`, ensuring unpredictability.
 
-> ✅ This design allows the original customer ID to be efficiently and securely reconstructed from the session key without requiring additional storage.
+> ✅ This design allows both the customer ID and session validity to be verified purely from the key — no session map, no cleanup thread, no locks, no shared mutable state. Every request validates independently at full throughput.
 
-## SessionManager
+#### **Default Key Length: 24**
 
-### 🔍 Why Do We Need the `keys` Deque?
-
-The `Deque<Integer> keys` (implemented as `ArrayDeque`) plays a critical role in **efficient and scalable session cleanup**. Its primary purpose is to **track session identifiers (`customerId`) that may have expired**, so they can be safely removed during periodic cleanup — **without scanning the entire session map**.
-
-Without this queue, the cleanup task would need to iterate over all entries in the `sessions` map to check validity, resulting in `O(n)` time complexity per cleanup cycle — which becomes inefficient as the number of sessions grows.
-
-Instead, this design uses a **lazy eviction strategy**:
-
-- Whenever a new session is created, its `customerId` is enqueued into `keys`.
-- The background cleaner thread only checks the **head** of the queue.
-- If the session at the head is still valid, it stops — because newer sessions are always added to the tail, and validity time is fixed (10 minutes).
-- Only expired sessions at the front are removed.
-
-This ensures that **cleanup cost is proportional to the number of expired sessions**, not the total number of sessions.
-
-### ✅ Why `ArrayDeque` Was Chosen
-
-**FIFO Access Pattern**: Sessions are created over time and expire in roughly the same order (FIFO). `ArrayDeque` efficiently supports insertion at the tail (`offerLast`) and removal from the head (`pollFirst`).
-
-**High Performance**: `ArrayDeque` offers `O(1)` amortized time for `offer`, `poll`, and `peek` operations. It's backed by a dynamic array, making it faster than `LinkedList` for most use cases due to better cache locality.
-
-**No Random Access Needed**: We only need to inspect and remove elements from the ends of the queue — a perfect match for deque semantics.
+The minimum key size is `1 (hex-len) + N (shifted digits) + 8 (expiry hex)` where N is the digit count of the customer ID. The default length of 24 ensures at least 5 random padding characters even for the largest 10-digit customer IDs.
 
 ## SortedSet
 

@@ -4,8 +4,6 @@ import domain.model.BetOfferId;
 import domain.model.CustomerId;
 import domain.model.Stake;
 import http.MiniHttpServer;
-import http.Session;
-import http.SessionManager;
 import utils.SimpleSessionKeyGenerator;
 
 import java.io.IOException;
@@ -53,14 +51,13 @@ public final class BettingServer {
         // register routes
         server.get("/:customerid/session", ctx -> {
             int customerId = Integer.parseInt(ctx.pathParam("customerid"));
-            Session session = ctx.session(customerId, true);
-            ctx.text(session.sessionKey());
+            ctx.text(SimpleSessionKeyGenerator.generateSessionKey(customerId));
         });
 
         server.group("/:betofferid/*", () -> {
             server.before("/stake", ctx -> {
-                Session sesssion = ctx.session(SimpleSessionKeyGenerator.parsePrefix(ctx.queryParam("sessionkey", "")), false);
-                if (sesssion == null || !sesssion.isValid()) {
+                String sessionKey = ctx.queryParam("sessionkey", "");
+                if (!SimpleSessionKeyGenerator.isValid(sessionKey)) {
                     ctx.status(401).text("invalid session");
                     ctx.abort();
                 }
@@ -87,7 +84,6 @@ public final class BettingServer {
         // close all
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
             server.stop();
-            SessionManager.getInstance().close();
             bettingStore.close();
         }));
     }
