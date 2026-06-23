@@ -14,8 +14,8 @@ public final class BettingServer {
     private static final int DEFAULT_PORT = 8080;
     private static final BettingStoreImpl bettingStore = new BettingStoreImpl();
 
-    private static void placeBet(int betOfferId, int customerId, int stake) {
-        bettingStore.placeBet(
+    private static boolean placeBet(int betOfferId, int customerId, int stake) {
+        return bettingStore.placeBet(
                 new Bet(
                     BetOfferId.of(betOfferId),
                     CustomerId.of(customerId),
@@ -67,8 +67,11 @@ public final class BettingServer {
                 int customerId = SimpleSessionKeyGenerator.parsePrefix(ctx.queryParam("sessionkey", ""));
                 int betOfferId = Integer.parseInt(ctx.pathParam("betofferid"));
                 int stake = Integer.parseInt(ctx.getRequestBody());
-                placeBet(betOfferId, customerId, stake);
-                ctx.status(204);
+                if (placeBet(betOfferId, customerId, stake)) {
+                    ctx.status(204);
+                } else {
+                    ctx.status(200).text("stake not higher than existing bet");
+                }
             });
 
             server.get("/highstakes", ctx -> {

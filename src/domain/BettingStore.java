@@ -6,7 +6,7 @@ import domain.model.BetOfferId;
 import java.util.List;
 
 public interface BettingStore {
-    void placeBet(Bet bet);
+    boolean placeBet(Bet bet);
 
     List<Bet> queryTopBets(BetOfferId offerId, int limit);
 

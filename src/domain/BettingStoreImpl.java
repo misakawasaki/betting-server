@@ -13,8 +13,6 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 import java.util.stream.Collectors;
 
 /**
@@ -27,8 +25,8 @@ import java.util.stream.Collectors;
  *       to reduce contention and ensure ordered processing per bet offer.</li>
  *   <li>{@link SortedSet} to maintain customers by stake in descending order
  *       for efficient top-N queries.</li>
- *   <li>Asynchronous processing with {@link CompletableFuture} to avoid
- *       blocking the caller thread.</li>
+ *   <li>Synchronous processing via {@link CompletableFuture} with virtual-thread-friendly
+ *       blocking — the caller parks while the shard executor processes the bet.</li>
  * </ul>
  *
  * <p>Each bet offer is mapped to a dedicated single-threaded executor,
@@ -36,9 +34,6 @@ import java.util.stream.Collectors;
  * while allowing high concurrency across different offers.
  */
 public final class BettingStoreImpl implements BettingStore,AutoCloseable {
-
-    // Logger for logging errors and operational events
-    private static final Logger LOG = Logger.getLogger(BettingStoreImpl.class.getName());
 
     /**
      * Number of executor shards (one per CPU core by default).
@@ -76,34 +71,35 @@ public final class BettingStoreImpl implements BettingStore,AutoCloseable {
     }
 
     /**
-     * Asynchronously places a bet.
+     * Synchronously places a bet, blocking the caller until the operation completes.
      *
      * <p>The operation is routed to a dedicated executor based on the bet offer ID,
-     * ensuring that all bets on the same offer are processed in order.
+     * ensuring that all bets on the same offer are processed in order. The caller's
+     * virtual thread parks while waiting, yielding the carrier thread to other requests.
      *
      * <p>If the bet offer does not exist, a new {@link SortedSet} is created with
      * {@link Stake#ZERO} as the lower bound (sentinel value).
      *
      * <p>If the customer has already placed a bet with a higher or equal stake,
-     * the new bet is rejected (only higher stakes are accepted).
+     * the new bet is rejected (only higher stakes are accepted) and {@code false}
+     * is returned.
      *
      * @param bet the bet to place
+     * @return {@code true} if the bet was accepted or updated; {@code false} if rejected
      * @throws NullPointerException if bet is null
      */
     @Override
-    public void placeBet(Bet bet) {
-        CompletableFuture.runAsync(
+    public boolean placeBet(Bet bet) {
+        return CompletableFuture.supplyAsync(
                 () -> {
                     SortedSet<CustomerId, Stake> set = store.computeIfAbsent(
                             bet.betOfferId(),
                             k -> new SortedSet<>(Stake.ZERO)
                     );
-                    set.addOrUpdate(bet.customerId(), bet.stake());
+                    return set.addOrUpdate(bet.customerId(), bet.stake());
                 },
                 executor(bet.betOfferId())
-        ).whenComplete((v, ex) -> { if (ex != null) {
-            LOG.log(Level.SEVERE, "placed bet failed", ex);
-        }});
+        ).join();
     }
 
     /**

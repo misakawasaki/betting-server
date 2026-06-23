@@ -100,14 +100,16 @@ This ensures:
 
 This approach reduces contention and avoids the overhead of fine-grained locking.
 
-### 2. Asynchronous Processing with CompletableFuture
+### 2. Synchronous Processing with CompletableFuture
 
-All write operations (`placeBet`) are executed asynchronously using `CompletableFuture.runAsync`.
+All operations (`placeBet` and `queryTopBets`) are routed to the offer's shard executor via `CompletableFuture.supplyAsync(...).join()`.
 
-- The caller does not block.
-- Errors are logged asynchronously via `whenComplete`, avoiding uncaught exceptions in the executor.
+- The caller blocks on `join()` until the shard executor completes the operation.
+- Because the HTTP server runs on virtual threads, blocking is nearly free — the parked virtual thread yields its carrier thread to serve other requests.
+- `placeBet` returns `boolean` (accepted or rejected), so the HTTP handler can send an accurate response (204 vs. rejection) before the client receives it.
+- This provides natural backpressure: if a shard falls behind, requests slow down instead of queuing into an unbounded buffer.
 
-Read operations (`queryTopBets`) use `supplyAsync` and `join()` to wait synchronously, ensuring a clean API while still leveraging the per-offer executor for consistency.
+Both write and read operations use the same synchronous pattern, ensuring the client always sees a response that reflects the actual state of the store.
 
 ### 3. Thread-Safe Data Store with ConcurrentHashMap
 
@@ -138,11 +140,8 @@ Using sharded executors avoids the need for:
 
 Instead, concurrency is managed at the routing level, simplifying the logic and improving scalability.
 
-### 6. Synchronous Query with Asynchronous Underpinning
+### 6. Virtual Threads Make Blocking Free
 
-`queryTopBets` returns immediately after the result is ready, using `join()` to wait on the async task.
+The HTTP server uses `Executors.newVirtualThreadPerTaskExecutor()`, so each request runs on its own virtual thread. When a handler calls `placeBet` or `queryTopBets`, the virtual thread parks on `join()` and the underlying carrier thread is immediately freed to process other requests.
 
-- This keeps the API simple and blocking-free for the caller’s thread (in terms of CPU work).
-- The actual wait is short and localized to the offer’s shard.
-
-For low-latency queries, this trade-off is acceptable and avoids callback complexity.
+This means synchronous blocking has no throughput cost — the traditional tradeoff (blocking = lost concurrency) does not apply. The accept rate is bounded by the actual processing rate of the shard executors, not by artificial async decoupling that hides queued work behind a premature 204.
