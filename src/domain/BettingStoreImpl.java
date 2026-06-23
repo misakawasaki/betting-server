@@ -13,6 +13,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 /**
@@ -157,6 +158,16 @@ public final class BettingStoreImpl implements BettingStore,AutoCloseable {
      */
     @Override
     public void close() {
-        for (ExecutorService e : executors) e.shutdown();
+        for (ExecutorService e : executors) {
+            e.shutdown();
+            try {
+                if (!e.awaitTermination(5, TimeUnit.SECONDS)) {
+                    e.shutdownNow();
+                }
+            } catch (InterruptedException ex) {
+                e.shutdownNow();
+                Thread.currentThread().interrupt();
+            }
+        }
     }
 }
