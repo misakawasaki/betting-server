@@ -114,7 +114,7 @@ public final class SortedSet<T, U extends Comparable<U>> {
      */
     public boolean addOrUpdate(T key, U value) {
         Integer index = indexMap.getOrDefault(key, minIndex);
-        if (value.compareTo(getValue(index)) < 0) {
+        if (value.compareTo(getValue(index)) <= 0) {
             return false;
         }
         if (index == minIndex) {
@@ -130,7 +130,10 @@ public final class SortedSet<T, U extends Comparable<U>> {
     /**
      * Returns the top N elements with the largest values (in descending order).
      *
-     * <p>The returned list is a live view, but modifications are not supported.
+     * <p>The returned list is a lazy view — entries are only materialized on
+     * access, avoiding upfront allocation of an ArrayList and N entry objects.
+     * For the actual capacity of 20 (top-20 bets), the per-access traversal cost
+     * is negligible and the GC savings are worthwhile under high request throughput.
      *
      * @param n the number of top elements to return
      * @return a list of the top N entries, sorted in descending order
@@ -139,12 +142,12 @@ public final class SortedSet<T, U extends Comparable<U>> {
         int actualLength = length;
         int tail = minIndex;
         while (getNext(tail) != -1) {
-            if (getValue(tail) == lowerBound) {
+            if (getValue(tail).equals(lowerBound)) {
                 actualLength--;
             }
             tail = getNext(tail);
         }
-        actualLength = getValue(tail) == lowerBound ? actualLength - 1 : actualLength;
+        actualLength = getValue(tail).equals(lowerBound) ? actualLength - 1 : actualLength;
 
         final int first = tail;
         final int cnt = Math.min(actualLength, n);
