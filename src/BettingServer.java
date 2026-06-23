@@ -40,8 +40,8 @@ public final class BettingServer {
 
         // register exception handler
         server.exceptionHandler((ctx, e) -> {
-            if (e instanceof NumberFormatException) {
-                ctx.status(400).text("Invalid number format: " + e.getMessage());
+            if (e instanceof NumberFormatException || e instanceof IllegalArgumentException) {
+                ctx.status(400).text("Bad request: " + e.getMessage());
             } else if (e.getMessage() != null && e.getMessage().contains("Request body exceeds")) {
                 ctx.status(400).text(e.getMessage());
             } else {
@@ -68,7 +68,7 @@ public final class BettingServer {
             server.post("/stake", ctx -> {
                 int customerId = SimpleSessionKeyGenerator.parsePrefix(ctx.queryParam("sessionkey", ""));
                 int betOfferId = Integer.parseInt(ctx.pathParam("betofferid"));
-                int stake = Integer.parseInt(ctx.getRequestBody());
+                int stake = Integer.parseInt(ctx.getRequestBody().trim());
                 if (placeBet(betOfferId, customerId, stake)) {
                     ctx.status(204);
                 } else {

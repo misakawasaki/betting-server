@@ -76,7 +76,7 @@ public final class Context {
 
     public Context text(String text) throws IOException {
         exchange.getResponseHeaders().add("Content-Type", "text/plain");
-        byte[] response = text.getBytes();
+        byte[] response = text.getBytes(StandardCharsets.UTF_8);
         exchange.sendResponseHeaders(statusCode, response.length);
         try (OutputStream os = exchange.getResponseBody()) {
             os.write(response);

@@ -150,7 +150,11 @@ public final class SimpleSessionKeyGenerator {
         }
         char[] digitChars = new char[len];
         for (int i = 0; i < len; i++) {
-            digitChars[i] = (char) (sessionKey.charAt(1 + i) - 'A');
+            char decoded = (char) (sessionKey.charAt(1 + i) - 'A');
+            if (decoded < '0' || decoded > '9') {
+                throw new IllegalArgumentException("invalid session key: bad prefix encoding");
+            }
+            digitChars[i] = decoded;
         }
         return Integer.parseInt(new String(digitChars));
     }
