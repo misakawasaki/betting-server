@@ -5,10 +5,12 @@ import java.util.regex.Pattern;
 
 public class PatternMiddleware implements Middleware {
     private final String pattern;
+    private final Pattern compiledPattern;
     private final Middleware delegate;
 
     public PatternMiddleware(String pattern, Middleware delegate) {
         this.pattern = pattern;
+        this.compiledPattern = compile(pattern);
         this.delegate = delegate;
     }
 
@@ -23,9 +25,13 @@ public class PatternMiddleware implements Middleware {
 
     @Override
     public boolean shouldApply(String path) {
-        String regexPattern = pattern
+        return compiledPattern.matcher(path).matches();
+    }
+
+    private static Pattern compile(String pattern) {
+        String regex = pattern
                 .replaceAll("/:([^/]+)", "/[^/]+")
                 .replaceAll("\\*", ".*");
-        return Pattern.matches(regexPattern, path);
+        return Pattern.compile(regex);
     }
 }

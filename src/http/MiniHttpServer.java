@@ -154,19 +154,13 @@ public final class MiniHttpServer {
         }
 
         for (Route route : methodRoutes) {
-            if (matchesPattern(route.pattern(), path)) {
+            if (route.compiledPattern().matcher(path).matches()) {
                 return route;
             }
         }
         return null;
     }
 
-    private boolean matchesPattern(String pattern, String path) {
-        String regexPattern = pattern
-                .replaceAll("/:([^/]+)", "/[^/]+")
-                .replaceAll("\\*", ".*");
-        return Pattern.matches(regexPattern, path);
-    }
 
     private void extractPathParams(String pattern, String path, Context ctx) {
         String[] patternParts = pattern.split("/");
