@@ -42,6 +42,8 @@ public final class BettingServer {
         server.exceptionHandler((ctx, e) -> {
             if (e instanceof NumberFormatException) {
                 ctx.status(400).text("Invalid number format: " + e.getMessage());
+            } else if (e.getMessage() != null && e.getMessage().contains("Request body exceeds")) {
+                ctx.status(400).text(e.getMessage());
             } else {
                 ctx.status(500).text("Server error: " + e.getMessage());
             }

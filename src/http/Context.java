@@ -10,6 +10,12 @@ import java.util.HashMap;
 import java.util.Map;
 
 public final class Context {
+    /**
+     * Maximum allowed request body size (1 KB). The only POST body in this
+     * server is a stake integer (at most 11 chars), so 1 KB is generous.
+     * Requests exceeding this are rejected to prevent OOM from oversized payloads.
+     */
+    private static final int MAX_BODY_SIZE = 1024;
     private final HttpExchange exchange;
     private final String method;
     private final String path;
@@ -98,10 +104,27 @@ public final class Context {
     }
 
     public String getRequestBody() throws IOException {
-        String body;
-        try (InputStream in = exchange.getRequestBody()) {
-            body = new String(in.readAllBytes(), StandardCharsets.UTF_8);
+        // Early reject via Content-Length header if present
+        String contentLength = exchange.getRequestHeaders().getFirst("Content-Length");
+        if (contentLength != null) {
+            try {
+                if (Integer.parseInt(contentLength) > MAX_BODY_SIZE) {
+                    throw new IOException("Request body exceeds limit of " + MAX_BODY_SIZE + " bytes");
+                }
+            } catch (NumberFormatException ignored) {
+                // Malformed Content-Length — fall through to bounded read
+            }
         }
-        return body;
+
+        // Bounded read: read at most MAX_BODY_SIZE + 1 bytes
+        // If we get more than MAX_BODY_SIZE, the body is too large (also
+        // handles chunked transfer encoding where Content-Length is absent)
+        try (InputStream in = exchange.getRequestBody()) {
+            byte[] bytes = in.readNBytes(MAX_BODY_SIZE + 1);
+            if (bytes.length > MAX_BODY_SIZE) {
+                throw new IOException("Request body exceeds limit of " + MAX_BODY_SIZE + " bytes");
+            }
+            return new String(bytes, StandardCharsets.UTF_8);
+        }
     }
 }
